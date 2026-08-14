@@ -1,0 +1,12 @@
+{
+  "name": "senv-prune",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Prune and back up .env files with optional JSON output and git commits.",
+  "bin": {
+    "senv-prune": "./senv-prune.sh"
+  },
+  "scripts": {
+    "check": "shellcheck senv-prune.sh"
+  }
+}
