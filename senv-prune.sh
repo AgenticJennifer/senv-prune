@@ -1,5 +1,5 @@
 #!/bin/bash
-# senv-prune.sh v0.3 FULL - Br00te Force Excellence
+# senv-prune.sh v0.3
 set -euo pipefail
 
 DRY_RUN=false
@@ -16,16 +16,58 @@ secret_warn() {
   fi
 }
 
-create_backup() { mkdir -p "$BACKUP_DIR"; cp "$1" "$BACKUP_DIR/$(basename "$1").$(date +%Y%m%d_%H%M%S).bak"; }
+create_backup() {
+  mkdir -p "$BACKUP_DIR"
+  cp "$1" "$BACKUP_DIR/$(basename "$1").$(date +%Y%m%d_%H%M%S).bak"
+}
+
+prune_duplicates() {
+  local file="$1"
+  local tmp
+  tmp="$(mktemp)"
+
+  awk '
+    /^[[:space:]]*($|#)/ { passthrough[NR] = $0; next }
+    /^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=/ {
+      key = $0
+      sub(/^[[:space:]]*/, "", key)
+      sub(/=.*/, "", key)
+      order[NR] = key
+      value[key] = $0
+      last[key] = NR
+      next
+    }
+    { passthrough[NR] = $0 }
+    END {
+      for (i = 1; i <= NR; i++) {
+        if (i in passthrough) {
+          print passthrough[i]
+        } else if ((i in order) && last[order[i]] == i) {
+          print value[order[i]]
+        }
+      }
+    }
+  ' "$file" > "$tmp"
+
+  if ! $DRY_RUN; then
+    mv "$tmp" "$file"
+  else
+    rm -f "$tmp"
+  fi
+}
 
 process_file() {
   local file="$1"
   create_backup "$file"
-  # ... (core logic from previous)
+  prune_duplicates "$file"
+
+  while IFS='=' read -r key _; do
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] && secret_warn "$key"
+  done < "$file"
+
   log "PROCESSED" "$file"
 }
 
-# Parse
 while [[ $# -gt 0 ]]; do
   case $1 in
     --dry-run) DRY_RUN=true ;;
